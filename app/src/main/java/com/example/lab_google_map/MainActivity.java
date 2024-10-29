@@ -31,7 +31,6 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.gms.tasks.Task;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.io.IOException;
@@ -44,8 +43,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     Location currentLocation;
     FusedLocationProviderClient fusedLocationProviderClient;
     SearchView searchView;
-    Button btnExit ;
-    // Location sharing
+    Button btnExit;
     LocationCallback locationCallback;
 
     @Override
@@ -59,11 +57,13 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         assert mapFragment != null;
         mapFragment.getMapAsync(this);
+
         btnExit = findViewById(R.id.btnExit);
         btnExit.setOnClickListener(view -> {
             finish();
             System.exit(0);
         });
+
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextSubmit(String query) {
@@ -77,13 +77,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         });
 
-        // GPS button
         FloatingActionButton gpsButton = findViewById(R.id.gpsButton);
         gpsButton.setOnClickListener(v -> moveCameraToCurrentLocation());
 
-        getLastLocation();
-
-        // Location sharing
         Button startSharingButton = findViewById(R.id.startSharing);
         Button stopSharingButton = findViewById(R.id.stopSharing);
         startSharingButton.setOnClickListener(v -> {
@@ -96,6 +92,50 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             stopLocationSharing();
             stopSharingButton.setVisibility(View.GONE);
             startSharingButton.setVisibility(View.VISIBLE);
+        });
+
+        getLastLocation();
+    }
+
+    private void getLastLocation() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, FINE_PERMISSION_CODE);
+            return;
+        }
+
+        fusedLocationProviderClient.getLastLocation().addOnSuccessListener(this, location -> {
+            if (location != null) {
+                currentLocation = location;
+                LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
+                if (myMap != null) {
+                    myMap.clear();
+                    myMap.addMarker(new MarkerOptions().position(latLng).title("Current Location"));
+                    myMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, 15));
+                }
+            } else {
+                Toast.makeText(this, "Unable to get current location", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void moveCameraToCurrentLocation() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
+        fusedLocationProviderClient.getLastLocation().addOnSuccessListener(this, location -> {
+            if (location != null) {
+                LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
+                if (myMap != null) {
+                    myMap.clear();
+                    myMap.addMarker(new MarkerOptions().position(latLng).title("Current Location"));
+                    myMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 15));
+                }
+            } else {
+                Toast.makeText(this, "Unable to get current location", Toast.LENGTH_SHORT).show();
+            }
         });
     }
 
@@ -118,36 +158,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-    private void getLastLocation() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, FINE_PERMISSION_CODE);
-            return;
-        }
-        Task<Location> locationTask = fusedLocationProviderClient.getLastLocation();
-        locationTask.addOnSuccessListener(location -> {
-            if (location != null) {
-                currentLocation = location;
-                if (myMap != null) {
-                    LatLng currentLatLng = new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude());
-                    putRedMarkerAndMoveCamera(currentLatLng, "My Location");
-                }
-            }
-        });
-    }
-
-    // Move the camera to the current location
-    private void moveCameraToCurrentLocation() {
-        if (currentLocation != null && myMap != null) {
-            LatLng currentLatLng = new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude());
-            putRedMarkerAndMoveCamera(currentLatLng, "My Location");
-        } else {
-            Toast.makeText(MainActivity.this, "Current location is not available", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    // General method to place a red marker and move the camera
     private void putRedMarkerAndMoveCamera(LatLng latLng, String title) {
-        myMap.clear(); // Clear previous markers if necessary
+        myMap.clear();
         myMap.addMarker(new MarkerOptions()
                 .position(latLng)
                 .title(title)
@@ -164,9 +176,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         myMap.setMyLocationEnabled(true);
         myMap.getUiSettings().setMyLocationButtonEnabled(false);
 
-        // Set continuous location updates with compass bearing
         LocationRequest locationRequest = LocationRequest.create();
-        locationRequest.setInterval(1000);  // Update location every 1 second
+        locationRequest.setInterval(1000);
         locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
 
         locationCallback = new LocationCallback() {
@@ -176,7 +187,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 Location location = locationResult.getLastLocation();
                 if (location != null && myMap != null) {
                     LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
-                    float bearing = location.getBearing();  // Device's direction
+                    float bearing = location.getBearing();
 
                     CameraPosition cameraPosition = new CameraPosition.Builder()
                             .target(currentLatLng)
@@ -192,20 +203,16 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         fusedLocationProviderClient.requestLocationUpdates(locationRequest, locationCallback, new Handler().getLooper());
     }
 
-    // Stop location sharing
     private void stopLocationSharing() {
-        // Disable location updates
         fusedLocationProviderClient.removeLocationUpdates(locationCallback);
 
-        // Disable the My Location layer
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             myMap.setMyLocationEnabled(false);
         }
 
-        // Reset the camera to a normal 2D view
-        if (myMap != null) {
+        if (myMap != null && currentLocation != null) {
             CameraPosition cameraPosition = new CameraPosition.Builder()
-                    .target(new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude()))  // Move back to current location
+                    .target(new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude()))
                     .zoom(15)
                     .tilt(0)
                     .bearing(0)
@@ -217,12 +224,17 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         myMap = googleMap;
-        myMap.getUiSettings().setCompassEnabled(true); // Enable compass
-        myMap.getUiSettings().setZoomControlsEnabled(true); //Enable zoom
-        myMap.getUiSettings().setZoomGesturesEnabled(true); //Enable zoom gesture (2 fingers)
-        getLastLocation();
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            myMap.setMyLocationEnabled(true);
+            myMap.getUiSettings().setMyLocationButtonEnabled(true);
+        }
+        myMap.getUiSettings().setCompassEnabled(true);
+        myMap.getUiSettings().setZoomControlsEnabled(true);
+        myMap.getUiSettings().setZoomGesturesEnabled(true);
 
         myMap.setOnMapClickListener(latLng -> putRedMarkerAndMoveCamera(latLng, "Selected Location"));
+
+        getLastLocation(); // Call this again to ensure the map is updated with the current location
     }
 
     @Override
